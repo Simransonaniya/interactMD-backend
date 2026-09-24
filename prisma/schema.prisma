@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  LEARNER
+  EDUCATOR
+  ADMIN
+}
+
+enum OrgType {
+  MEDICAL_SCHOOL
+  HOSPITAL_RESIDENCY
+  INDIVIDUAL
+}
+
+enum CaseDifficulty {
+  NOVICE
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CaseVersionStatus {
+  DRAFT
+  CLINICAL_REVIEW
+  TEST
+  APPROVED
+  PUBLISHED
+  RETIRED
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+enum SessionStage {
+  HISTORY
+  EXAMINATION
+  INVESTIGATION
+  DIAGNOSIS
+  MANAGEMENT
+  EVALUATION
+  COMPLETED
+}
+
+enum MessageRole {
+  STUDENT
+  PATIENT
+  SYSTEM
+  ATTENDING
+}
+
+enum EventType {
+  HISTORY_QUESTION
+  EXAM_REQUEST
+  INVESTIGATION_REQUEST
+  INVESTIGATION_RESULT
+  DIFFERENTIAL_SUBMITTED
+  DIAGNOSIS_SUBMITTED
+  MANAGEMENT_SUBMITTED
+  SESSION_COMPLETED
+}
+
+model User {
+  id             String         @id @default(uuid())
+  email          String         @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole       @default(LEARNER)
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  sessions       SimulationSession[]
+  evaluations    ClinicalEvaluation[]
+  weaknesses     LearnerWeakness[]
+  authoredCases  Case[]         @relation("AuthoredCases")
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  type      OrgType  @default(MEDICAL_SCHOOL)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+
+  @@map("organizations")
+}
+
+model Case {
+  id                 String           @id @default(uuid())
+  slug               String           @unique
+  title              String
+  specialty          String
+  difficulty         CaseDifficulty   @default(INTERMEDIATE)
+  presentation       String
+  estimatedMinutes   Int              @default(15)
+  tags               String[]         @default([])
+  learningObjectives Json             @default("[]")
+  authorId           String?
+  author             User?            @relation("AuthoredCases", fields: [authorId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  versions           CaseVersion[]
+  sessions           SimulationSession[]
+  evaluations        ClinicalEvaluation[]
+
+  @@map("cases")
+}
+
+model CaseVersion {
+  id                   String            @id @default(uuid())
+  caseId               String
+  case                 Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  versionNumber        Int               @default(1)
+  status               CaseVersionStatus @default(DRAFT)
+  
+  // Structured Clinical Source of Truth
+  patientProfile       Json              // name, age, gender, occupation, avatarUrl, initialStatement, mood, appearance
+  initialVitals        Json              // heartRate, bloodPressure, respiratoryRate, oxygenSaturation, temperature, painScore
+  chiefComplaint       Json              // presentation complaint, duration
+  historyFacts         Json              // OPQRST: onset, provocation, quality, radiation, severity, timing, associated, negatives, pmh, meds, allergies, family, social
+  physicalFindings     Json              // Array of exam items: { id, system, name, actionLabel, findingDescription, isAbnormal, significance }
+  investigations       Json              // Array of tests: { id, category, name, turnaroundMinutes, value, interpretation, isAbnormal, details }
+  diagnosisOptions     Json              // Array of diagnoses: { id, name, icdCode, category, isCorrectPrimary, isHighDifferential, rationale }
+  managementProtocols  Json              // Array of interventions: { id, label, isCorrect, feedback }
+  scoringRubric        Json              // criticalActions, highValueQuestions, redFlagsToScreen
+  systemPromptTemplate String?           // Optional custom system prompt template
+  
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  sessions             SimulationSession[]
+
+  @@unique([caseId, versionNumber])
+  @@map("case_versions")
+}
+
+model SimulationSession {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  caseId         String
+  case           Case             @relation(fields: [caseId], references: [id])
+  caseVersionId  String
+  caseVersion    CaseVersion      @relation(fields: [caseVersionId], references: [id])
+  
+  status         SessionStatus    @default(ACTIVE)
+  currentStage   SessionStage     @default(HISTORY)
+  patientState   Json             @default("{}") // dynamic emotional state, pain level, disclosures
+  
+  startedAt      DateTime         @default(now())
+  endedAt        DateTime?
+  durationSeconds Int             @default(0)
+
+  messages       ChatMessage[]
+  events         InteractionEvent[]
+  evaluation     ClinicalEvaluation?
+
+  @@map("simulation_sessions")
+}
+
+model ChatMessage {
+  id              String             @id @default(uuid())
+  sessionId       String
+  session         SimulationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role            MessageRole
+  content         String
+  category        String?            @default("General") // HPI, PMH, Meds, Allergies, Social, Exam, Lab
+  empathyDetected Boolean            @default(false)
+  timestamp       DateTime           @default(now())
+
+  @@map("chat_messages")
+}
+
+model InteractionEvent {
+  id        String             @id @default(uuid())
+  sessionId String
+  session   SimulationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type      EventType
+  name      String
+  payload   Json               @default("{}")
+  timestamp DateTime           @default(now())
+
+  @@map("interaction_events")
+}
+
+model ClinicalEvaluation {
+  id                      String            @id @default(uuid())
+  sessionId               String            @unique
+  session                 SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId                  String
+  user                    User              @relation(fields: [userId], references: [id])
+  caseId                  String
+  case                    Case              @relation(fields: [caseId], references: [id])
+  
+  overallScore            Int
+  passStatus              Boolean
+  overallGrade            String            // High Honors, Honors, Pass, Remediate
+  durationSeconds         Int
+  
+  // 5 Dimension Scores Breakdown (Interview, Reasoning, Communication, Empathy, Management)
+  dimensionScores         Json
+  strengths               String[]          @default([])
+  areasForImprovement     String[]          @default([])
+  criticalActionsTaken    String[]          @default([])
+  criticalActionsMissed   String[]          @default([])
+  attendingSummary        String
+  
+  createdAt               DateTime          @default(now())
+
+  @@map("clinical_evaluations")
+}
+
+model LearnerWeakness {
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  domain             String   // e.g. "Cardiac Risk Factor History", "Physical Exam Localization", "Contraindicated Therapies"
+  frequency          Int      @default(1)
+  lastEncounterId    String?
+  recommendedCaseIds String[] @default([])
+  updatedAt          DateTime @updatedAt
+
+  @@unique([userId, domain])
+  @@map("learner_weaknesses")
+}
