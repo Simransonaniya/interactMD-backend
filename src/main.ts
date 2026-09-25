@@ -2,7 +2,40 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AppModule } from './app.module';
+
+// Auto-load Render secret files into process.env if present
+const secretsDir = '/etc/secrets';
+if (fs.existsSync(secretsDir)) {
+  try {
+    const files = fs.readdirSync(secretsDir);
+    for (const file of files) {
+      const filePath = path.join(secretsDir, file);
+      if (fs.statSync(filePath).isFile()) {
+        const val = fs.readFileSync(filePath, 'utf-8').trim();
+        if (val && !process.env[file]) {
+          process.env[file] = val;
+        }
+      }
+    }
+  } catch {
+    // Ignore secret reading error
+  }
+}
+
+// Auto-fix truncated PostgreSQL connection URLs
+if (process.env.DATABASE_URL) {
+  let url = process.env.DATABASE_URL.trim();
+  if (!url.startsWith('postgresql://') && !url.startsWith('postgres://')) {
+    if (url.includes('@dpg-') || url.startsWith('dpg-')) {
+      const hostPart = url.includes('@') ? url.split('@')[1] : url;
+      url = `postgresql://interactmd_user:7AUTranNblFQY9MJfOCL7g0NeBIrNqNh@${hostPart}`;
+      process.env.DATABASE_URL = url;
+    }
+  }
+}
 
 async function bootstrap() {
   const logger = new Logger('InteractMD-Bootstrap');

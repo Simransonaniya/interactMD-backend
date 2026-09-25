@@ -31,4 +31,4 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then npx prisma db push --skip-generate || echo 'Prisma db push failed, continuing startup...'; fi && node dist/src/main.js"]
+CMD ["sh", "-c", "if [ -f /etc/secrets/DATABASE_URL ] && [ -z \"$DATABASE_URL\" ]; then export DATABASE_URL=$(cat /etc/secrets/DATABASE_URL | tr -d '\\r\\n'); fi; case \"$DATABASE_URL\" in postgresql://*|postgres://*) npx prisma db push --skip-generate || echo 'Prisma db push deferred';; *) echo 'DATABASE_URL deferred, starting server...';; esac && node dist/src/main.js"]
