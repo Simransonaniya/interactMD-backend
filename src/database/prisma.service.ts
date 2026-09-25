@@ -2,7 +2,9 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 
-function getNormalizedDatabaseUrl(): string | undefined {
+const RENDER_POSTGRES_DEFAULT = 'postgresql://interactmd_user:7AUTranNblFQY9MJfOCL7g0NeBIrNqNh@dpg-dar1g2942hec73cl5at0-a/interactmd';
+
+function getNormalizedDatabaseUrl(): string {
   let dbUrl = process.env.DATABASE_URL;
   if (!dbUrl && fs.existsSync('/etc/secrets/DATABASE_URL')) {
     try {
@@ -12,10 +14,18 @@ function getNormalizedDatabaseUrl(): string | undefined {
     }
   }
 
+  if (!dbUrl || dbUrl.trim() === '') {
+    dbUrl = RENDER_POSTGRES_DEFAULT;
+    process.env.DATABASE_URL = dbUrl;
+  }
+
   if (dbUrl && !dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://')) {
-    if (dbUrl.includes('@dpg-') || dbUrl.startsWith('dpg-')) {
+    if (dbUrl.includes('@dpg-') || dbUrl.startsWith('dpg-') || dbUrl.includes('interactmd')) {
       const hostPart = dbUrl.includes('@') ? dbUrl.split('@')[1] : dbUrl;
       dbUrl = `postgresql://interactmd_user:7AUTranNblFQY9MJfOCL7g0NeBIrNqNh@${hostPart}`;
+      process.env.DATABASE_URL = dbUrl;
+    } else {
+      dbUrl = RENDER_POSTGRES_DEFAULT;
       process.env.DATABASE_URL = dbUrl;
     }
   }
