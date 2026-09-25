@@ -13,8 +13,10 @@ async function bootstrap() {
   const apiPrefix = configService.get<string>('apiPrefix') || '/api/v1';
   const corsOrigins = configService.get<string[]>('corsOrigin') || ['http://localhost:5173'];
 
-  // Global Prefix
-  app.setGlobalPrefix(apiPrefix);
+  // Global Prefix (exclude root and health routes for uptime checks)
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: ['/', 'health'],
+  });
 
   // CORS Configuration
   app.enableCors({
