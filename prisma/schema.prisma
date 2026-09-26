@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -69,13 +69,13 @@ enum EventType {
 }
 
 model User {
-  id             String         @id @default(uuid())
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
   email          String         @unique
   passwordHash   String
   firstName      String
   lastName       String
   role           UserRole       @default(LEARNER)
-  organizationId String?
+  organizationId String?        @db.ObjectId
   organization   Organization?  @relation(fields: [organizationId], references: [id])
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -89,7 +89,7 @@ model User {
 }
 
 model Organization {
-  id        String   @id @default(uuid())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   name      String
   type      OrgType  @default(MEDICAL_SCHOOL)
   createdAt DateTime @default(now())
@@ -100,7 +100,7 @@ model Organization {
 }
 
 model Case {
-  id                 String           @id @default(uuid())
+  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
   slug               String           @unique
   title              String
   specialty          String
@@ -108,8 +108,8 @@ model Case {
   presentation       String
   estimatedMinutes   Int              @default(15)
   tags               String[]         @default([])
-  learningObjectives Json             @default("[]")
-  authorId           String?
+  learningObjectives Json
+  authorId           String?          @db.ObjectId
   author             User?            @relation("AuthoredCases", fields: [authorId], references: [id])
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
@@ -122,8 +122,8 @@ model Case {
 }
 
 model CaseVersion {
-  id                   String            @id @default(uuid())
-  caseId               String
+  id                   String            @id @default(auto()) @map("_id") @db.ObjectId
+  caseId               String            @db.ObjectId
   case                 Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
   versionNumber        Int               @default(1)
   status               CaseVersionStatus @default(DRAFT)
@@ -149,17 +149,17 @@ model CaseVersion {
 }
 
 model SimulationSession {
-  id             String           @id @default(uuid())
-  userId         String
+  id             String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String           @db.ObjectId
   user           User             @relation(fields: [userId], references: [id])
-  caseId         String
+  caseId         String           @db.ObjectId
   case           Case             @relation(fields: [caseId], references: [id])
-  caseVersionId  String
+  caseVersionId  String           @db.ObjectId
   caseVersion    CaseVersion      @relation(fields: [caseVersionId], references: [id])
   
   status         SessionStatus    @default(ACTIVE)
   currentStage   SessionStage     @default(HISTORY)
-  patientState   Json             @default("{}") // dynamic emotional state, pain level, disclosures
+  patientState   Json             // dynamic emotional state, pain level, disclosures
   
   startedAt      DateTime         @default(now())
   endedAt        DateTime?
@@ -173,8 +173,8 @@ model SimulationSession {
 }
 
 model ChatMessage {
-  id              String             @id @default(uuid())
-  sessionId       String
+  id              String             @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId       String             @db.ObjectId
   session         SimulationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role            MessageRole
   content         String
@@ -186,24 +186,24 @@ model ChatMessage {
 }
 
 model InteractionEvent {
-  id        String             @id @default(uuid())
-  sessionId String
+  id        String             @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId String             @db.ObjectId
   session   SimulationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   type      EventType
   name      String
-  payload   Json               @default("{}")
+  payload   Json
   timestamp DateTime           @default(now())
 
   @@map("interaction_events")
 }
 
 model ClinicalEvaluation {
-  id                      String            @id @default(uuid())
-  sessionId               String            @unique
+  id                      String            @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId               String            @unique @db.ObjectId
   session                 SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId                  String
+  userId                  String            @db.ObjectId
   user                    User              @relation(fields: [userId], references: [id])
-  caseId                  String
+  caseId                  String            @db.ObjectId
   case                    Case              @relation(fields: [caseId], references: [id])
   
   overallScore            Int
@@ -225,8 +225,8 @@ model ClinicalEvaluation {
 }
 
 model LearnerWeakness {
-  id                 String   @id @default(uuid())
-  userId             String
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String   @db.ObjectId
   user               User     @relation(fields: [userId], references: [id])
   domain             String   // e.g. "Cardiac Risk Factor History", "Physical Exam Localization", "Contraindicated Therapies"
   frequency          Int      @default(1)

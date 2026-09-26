@@ -4,7 +4,7 @@ export default () => ({
   apiPrefix: process.env.API_PREFIX || '/api/v1',
   corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000').split(','),
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/interactmd?schema=public',
+    url: process.env.DATABASE_URL || process.env.MONGODB_URI || 'mongodb+srv://simransonaniya77_db_user:Vku0tJvToocNjQCn@cluster0.oubgq77.mongodb.net/interactmd?retryWrites=true&w=majority&appName=Cluster0',
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

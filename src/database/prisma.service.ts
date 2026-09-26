@@ -2,10 +2,10 @@ import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/commo
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 
-const RENDER_POSTGRES_DEFAULT = 'postgresql://interactmd_user:7AUTranNblFQY9MJfOCL7g0NeBIrNqNh@dpg-dar1g2942hec73cl5at0-a/interactmd';
+const MONGODB_ATLAS_DEFAULT = 'mongodb+srv://simransonaniya77_db_user:Vku0tJvToocNjQCn@cluster0.oubgq77.mongodb.net/interactmd?retryWrites=true&w=majority&appName=Cluster0';
 
 function getNormalizedDatabaseUrl(): string {
-  let dbUrl = process.env.DATABASE_URL;
+  let dbUrl = process.env.DATABASE_URL || process.env.MONGODB_URI;
   if (!dbUrl && fs.existsSync('/etc/secrets/DATABASE_URL')) {
     try {
       dbUrl = fs.readFileSync('/etc/secrets/DATABASE_URL', 'utf-8').trim();
@@ -14,21 +14,12 @@ function getNormalizedDatabaseUrl(): string {
     }
   }
 
-  if (!dbUrl || dbUrl.trim() === '') {
-    dbUrl = RENDER_POSTGRES_DEFAULT;
+  if (!dbUrl || dbUrl.trim() === '' || (!dbUrl.startsWith('mongodb://') && !dbUrl.startsWith('mongodb+srv://'))) {
+    dbUrl = MONGODB_ATLAS_DEFAULT;
     process.env.DATABASE_URL = dbUrl;
+    process.env.MONGODB_URI = dbUrl;
   }
 
-  if (dbUrl && !dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://')) {
-    if (dbUrl.includes('@dpg-') || dbUrl.startsWith('dpg-') || dbUrl.includes('interactmd')) {
-      const hostPart = dbUrl.includes('@') ? dbUrl.split('@')[1] : dbUrl;
-      dbUrl = `postgresql://interactmd_user:7AUTranNblFQY9MJfOCL7g0NeBIrNqNh@${hostPart}`;
-      process.env.DATABASE_URL = dbUrl;
-    } else {
-      dbUrl = RENDER_POSTGRES_DEFAULT;
-      process.env.DATABASE_URL = dbUrl;
-    }
-  }
   return dbUrl;
 }
 
@@ -39,33 +30,27 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   constructor() {
     const url = getNormalizedDatabaseUrl();
-    const isValid = url && (url.startsWith('postgresql://') || url.startsWith('postgres://'));
-    super(isValid ? { datasources: { db: { url } } } : undefined);
+    super({ datasources: { db: { url } } });
   }
 
   async onModuleInit() {
     const url = getNormalizedDatabaseUrl();
-    const isValid = url && (url.startsWith('postgresql://') || url.startsWith('postgres://'));
-    if (!isValid) {
-      this.isAvailable = false;
-      this.logger.warn('DATABASE_URL is not configured with postgresql:// prefix. Database connection deferred.');
-      return;
-    }
+    this.logger.log(`Initializing MongoDB connection via Prisma to MongoDB Atlas...`);
 
     try {
       await this.$connect();
       this.isAvailable = true;
-      this.logger.log('Connected to PostgreSQL database successfully via Prisma.');
+      this.logger.log('Connected to MongoDB Atlas database successfully via Prisma.');
     } catch (err) {
       this.isAvailable = false;
-      this.logger.warn(`Database connection deferred or offline: ${err.message}`);
+      this.logger.warn(`MongoDB Atlas connection deferred or initializing: ${err.message}`);
     }
   }
 
   async onModuleDestroy() {
     if (this.isAvailable) {
       await this.$disconnect();
-      this.logger.log('Disconnected from database.');
+      this.logger.log('Disconnected from MongoDB Atlas database.');
     }
   }
 }

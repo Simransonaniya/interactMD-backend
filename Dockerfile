@@ -31,4 +31,4 @@ COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "if [ -z \"$DATABASE_URL\" ] || [ \"$DATABASE_URL\" = \"\" ]; then export DATABASE_URL='postgresql://interactmd_user:7AUTranNblFQY9MJfOCL7g0NeBIrNqNh@dpg-dar1g2942hec73cl5at0-a/interactmd'; fi; npx prisma db push --skip-generate || echo 'Prisma sync deferred'; node dist/src/main.js"]
+CMD ["sh", "-c", "if [ -z \"$DATABASE_URL\" ] || [ \"$DATABASE_URL\" = \"\" ]; then export DATABASE_URL='mongodb+srv://simransonaniya77_db_user:Vku0tJvToocNjQCn@cluster0.oubgq77.mongodb.net/interactmd?retryWrites=true&w=majority&appName=Cluster0'; fi; npx prisma db push --skip-generate || echo 'Prisma MongoDB sync deferred'; node dist/src/main.js"]
